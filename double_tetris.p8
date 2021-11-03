@@ -8,45 +8,87 @@ padding = 1
 table={}
 shape={{},{}}
 move_dir={{0,1},{0,-1}}
-s_speed=30
+s_speed=50
 s_frames_left={}
-scores={0,0}
 colors={0,7}
 
-function _init()
-	init_particles()
-	for x = 0, sizex - 1 do
-		table[x] = {}
-		for y = 0, sizey - 1 do
-			if y < sizey / 2 then
-				table[x][y] =
-				{x=x,y=y,col=7,v=2}
-			else
-				table[x][y] =
-				{x=x,y=y,col=0,v=1}
+cur_scene=0
+scenes=
+{
+	{
+		name="title",
+		update=function()
+			update_title()
+		end,
+		init=function()
+			init_title()
+		end,
+		draw=function()
+			draw_title()
+		end,
+	},
+	{
+		name="game",
+		update=function()
+			update_shape(1)
+			update_shape(2)
+			check_input()
+		end,
+		init=function()
+			for x = 0, sizex - 1 do
+				table[x] = {}
+				for y = 0, sizey - 1 do
+					if y < sizey / 2 then
+						table[x][y] =
+						{x=x,y=y,col=7,v=2}
+					else
+						table[x][y] =
+						{x=x,y=y,col=0,v=1}
+					end
+				end
+			end	
+			xoffset = 64-(#table+1)*cell_size/2
+			yoffset = 64-(#table[0]+1)*cell_size/2
+			get_random_shape(1)
+			get_random_shape(2)
+			s_frames_left = {s_speed, s_speed}
+			scores={0,0}
+		end,
+		draw=function()
+			draw_field_back()
+			for x,col in pairs(table) do
+				for y,pixel in pairs(table[x]) do
+					draw_cell(x,y,table[x][y].col)
+				end
 			end
+			draw_scores()
+			draw_shape(1)
+			draw_shape(2)
+		end,
+	}
+}
+
+function load_scene(name)
+	for ind,scene in pairs(scenes) do
+		if scene.name == name then
+			cur_scene = ind
+			scene:init()
+			break
 		end
-	end	
-	xoffset = 64-(#table+1)*cell_size/2
-	yoffset = 64-(#table[0]+1)*cell_size/2
-	get_random_shape(1)
-	get_random_shape(2)
-	s_frames_left = {s_speed, s_speed}
+	end
+end
+
+function _init()
+	palt(0,false)
+	palt(14,true)
+	init_particles()
+	load_scene("title")
 end
 
 function _draw()
 	cls()
-
-	draw_field_back()
-	for x,col in pairs(table) do
-		for y,pixel in pairs(table[x]) do
-			draw_cell(x,y,table[x][y].col)
-		end
-	end
-	draw_scores()
+	scenes[cur_scene]:draw()
 	draw_particles()
-	draw_shape(1)
-	draw_shape(2)
 	print_debug()
 end
 
@@ -59,11 +101,30 @@ function draw_shape(v)
  end
 end
 
-function _update()
-	update_shape(1)
-	update_shape(2)
-	update_particles()
-	check_input()
+function _update60()
+	update_coroutines()
+	update_particles(60)
+	scenes[cur_scene]:update()
+end
+
+coroutines={}
+function update_coroutines()
+	local has_alive = false
+	for k,cor in pairs(coroutines) do
+		if costatus(cor) != 'dead' then
+			coresume(cor)
+			has_alive = true
+		end
+	end
+	if not has_alive then
+		for i=1,#coroutines do
+			coroutines[i] = nil
+		end
+	end
+end
+
+function add_coroutine(c)
+	coroutines[#coroutines+1]=cocreate(c)
 end
 
 function draw_field_back()
@@ -103,7 +164,9 @@ function set_cell(x,y,v)
 	table[x][y].v = v
 end
 
+input_blocked=false
 function check_input()
+	if input_blocked then return end
 	if btnp(⬅️) then
 		move_shape_checked(-1,0,1)
 		move_shape_checked(-1,0,2)
@@ -119,8 +182,12 @@ function check_input()
 		drop_shape(2)
 	end
 	if btnp(❎) then
-		rotate_shape(1)
-		rotate_shape(2)
+		rotate_shape(1,true)
+		rotate_shape(2,true)
+	end
+	if btnp(4) then
+		rotate_shape(1,false)
+		rotate_shape(2,false)
 	end
 end
 
@@ -194,8 +261,8 @@ function set_shape_cells(cells,v)
 	end
 end
 
-function rotate_shape(v)
-	set_shape_cells(get_rotated_cells(true, v), v)
+function rotate_shape(v,right)
+	set_shape_cells(get_rotated_cells(right, v), v)
 	if can_move_shape(0,0,v) then return end
 	if can_move_shape(1,0,v) then move_shape(1,0,v) return end
 	if can_move_shape(-1,0,v) then move_shape(-1,0,v) return end
@@ -206,13 +273,25 @@ function rotate_shape(v)
 end
 
 function drop_shape(v)
-	while can_move_shape(move_dir[v][1],move_dir[v][2],v) do
-		move_shape(move_dir[v][1],move_dir[v][2],v)
-	end
-	place_shape(v)
+	add_coroutine(function() drop_coroutine(v) end)
 	s_frames_left[v] = s_speed
 end
 
+function drop_coroutine(v)
+	input_blocked = true
+	local move_per_frame = 2
+	local c = 0
+	while can_move_shape(move_dir[v][1],move_dir[v][2],v) do
+		move_shape(move_dir[v][1],move_dir[v][2],v)
+		c += 1
+		if c == move_per_frame then
+			c = 0
+			yield()
+		end
+	end
+	place_shape(v)
+	input_blocked = false
+end
 
 -->8
 debug_str={}
@@ -255,9 +334,9 @@ all_shapes=
  },
  {
  {{0,0},{1,0},{1,-1},{-1,0}},
- {{0,0},{0,1},{0,-1},{-1,-1}},
- {{0,0},{1,0},{-1,0},{-1,1}},
  {{0,0},{0,-1},{0,1},{1,1}},
+ {{0,0},{1,0},{-1,0},{-1,1}},
+ {{0,0},{0,1},{0,-1},{-1,-1}},
  },
  {
  {{0,0},{0,1},{0,-1},{0,-2}},
@@ -281,19 +360,72 @@ function get_rotated_cells(right, v)
 	return all_shapes[cur_shape[v]][cur_rotation[v]]
 end
 
+title_text_delay=180
+function init_title()
+	letters=
+	{
+		{n=32,x=2, y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=34,x=20,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=36,x=38,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=38,x=56,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=40,x=74,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=42,x=92,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
+		{n=0,x=2, y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=2,x=20,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=0,x=38,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=4,x=56,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=6,x=74,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=8,x=92,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+	}
+	for k,l in pairs(letters) do
+		if k < 7 then
+			l.x += 5
+		else
+			l.x += 10
+		end
+	end
+end
+
+function update_title()
+	for l in all(letters) do
+		l.y += l.speed
+		if l.y > l.ymax and l.speed > 0 or l.y < l.ymax and l.speed < 0 then
+			l.speed = 0
+			l.y = l.ymax
+			particle_explosion(l.x+8,l.y+8,l.col,15)
+		end
+	end
+	title_text_delay -= 1
+	if btnp(❎) then
+		load_scene("game")
+	end
+end
+
+function draw_title()
+	rectfill(0,0,128,64,7)
+	rectfill(0,64,128,128,0)
+	color(0)
+	for l in all(letters) do
+		spr(l.n,l.x,l.y,2,2)
+	end
+	if (title_text_delay < 0 and title_text_delay % 30 < 20) then
+		print("press ❎ to start", 33, 90, 7)
+	end
+end
+
 -->8
 particles={}
 
 function init_particles()
-	for i=1,70 do
+	for i=1,100 do
 		particles[#particles + 1] = create_particle()
 	end
 end
 
-function update_particles()
+function update_particles(fps)
 	for p in all(particles) do
 		if p.enabled then
-			p:update()
+			p:update(fps)
 		end
 	end
 end
@@ -314,12 +446,12 @@ function create_particle()
 	local particle =
 	{
 		pos={x=0,y=0}, vel={x=0,y=0}, start_pos={x=0,y=0},
-		size_cur=2, size_start=2, size_over_distance=-0.15,
+		size_cur=2, size_start=2, size_over_distance=-0.12,
 		col=2,
 
-		update = function(self)
-			self.pos.x += self.vel.x / 30
-			self.pos.y += self.vel.y / 30
+		update = function(self,fps)
+			self.pos.x += self.vel.x / fps
+			self.pos.y += self.vel.y / fps
 			self.size_cur = self.size_start + self.size_over_distance * v_mag{x=self.pos.x-self.start_pos.x,y=self.pos.y-self.start_pos.y}
 			if self.size_cur <= 0 then self.enabled = false end
 		end,
@@ -341,7 +473,7 @@ function enable_particles(cnt, x, y, col)
 			p.pos = {x=x,y=y}
 			p.start_pos = {x=x,y=y}
 			p.col = col
-			p.vel = v_mults(random_circle_vec(), 15 + rnd(15))
+			p.vel = v_mults(random_circle_vec(), 20 + rnd(17))
 			cnt-=1
 		end
 	end
@@ -406,12 +538,38 @@ function v_reflect( v, n )
 end
 
 __gfx__
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ee66666666666666ee66666666666666ee66666666666eeeeeeeeeee66eeeeeeeeeee6666666666e000000000000000000000000000000000000000000000000
+e777777777777776e777777777777776e77777777777666eeeeeeee776eeeeeeeeee77777777776e000000000000000000000000000000000000000000000000
+e777777777777776e77777777777777ee777777777777766eeeeeee77eeeeeeeeee77777777777ee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee776666666667776eeeeeeeeeeeeeeeeee777eeeeeeeeeee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee776eeeeeeeee776eeeeeeee66eeeeeeee776eeeeeeeeeee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee776eeeeeeeee776eeeeeee776eeeeeeee776eeeeeeeeeee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee77666666eeeeeeee776eeeeeeeee776eeeeeee776eeeeeeee77766666666eee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee77777776eeeeeeee776eeeeeeee777eeeeeeee776eeeeeeeee77777777766ee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee7777777eeeeeeeee776eeeeeee777eeeeeeeee776eeeeeeeeee77777777766e000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee777777777777eeeeeeeeee776eeeeeeeeeeeeeeeee7776e000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee7777777777766eeeeeeeee776eeeeeeeeeeeeeeeeee776e000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776eeeeeeeeeeeee77666666677766eeeeeeee776eeeeeeeeeeeeeeeeee776e000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee776666666666666e776eeeeeee77766eeeeeee776eeeeeeeee66666666777ee000000000000000000000000000000000000000000000000
+eeeeeee776eeeeeee777777777777776e776eeeeeeee7776eeeeeee776eeeeeeee77777777777eee000000000000000000000000000000000000000000000000
+eeeeeee77eeeeeeee77777777777777ee77eeeeeeeeee77eeeeeeee77eeeeeeeee7777777777eeee000000000000000000000000000000000000000000000000
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000000000000000000000000000
+ee555555555555eeeeee5555555555eeee55eeeeeeeeee55ee555555555555eeee55eeeeeeeeeeeeee5555555555555500000000000000000000000000000000
+e00000000000055eeee000000000055ee005eeeeeeeee005e00000000000055ee005eeeeeeeeeeeee00000000000000500000000000000000000000000000000
+e000000000000055ee00000000000055e005eeeeeeeee005e000000000000055e005eeeeeeeeeeeee00000000000000e00000000000000000000000000000000
+e005eeeeeeee0005e000eeeeeeee0005e005eeeeeeeee005e005eeeeeeee0005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e00555555555000ee005eeeeeeeeeeeee00555555eeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e00000000000005ee005eeeeeeeeeeeee00000005eeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e000000000000055e005eeeeeeeeeeeee0000000eeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeee0005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeee005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e005eeeeeeeee005e0055eeeeeeee005e0055eeeeeeee005e005eeeeeeeee005e005eeeeeeeeeeeee005eeeeeeeeeeee00000000000000000000000000000000
+e00555555555000ee00055555555000ee00055555555000ee00555555555000ee005555555555555e00555555555555500000000000000000000000000000000
+e0000000000000eeee000000000000eeee000000000000eee0000000000000eee000000000000005e00000000000000500000000000000000000000000000000
+e000000000000eeeeee0000000000eeeeee0000000000eeee000000000000eeee00000000000000ee00000000000000e00000000000000000000000000000000
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
 __label__
 88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
 88888eeeeee888eeeeee888777777888888888888888888888888888888888888888888888888888888ff8ff8888228822888222822888888822888888228888
