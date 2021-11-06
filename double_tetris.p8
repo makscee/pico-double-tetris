@@ -103,6 +103,7 @@ end
 
 function _update60()
 	update_coroutines()
+	anim_update(60)
 	update_particles(60)
 	scenes[cur_scene]:update()
 end
@@ -364,18 +365,18 @@ title_text_delay=180
 function init_title()
 	letters=
 	{
-		{n=32,x=2, y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=34,x=20,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=36,x=38,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=38,x=56,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=40,x=74,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=42,x=92,y=-150,speed=1+rnd()*1.3,ymax=48,col=0},
-		{n=0,x=2, y=128,speed=-1-rnd()*2,ymax=64,col=7},
-		{n=2,x=20,y=128,speed=-1-rnd()*2,ymax=64,col=7},
-		{n=0,x=38,y=128,speed=-1-rnd()*2,ymax=64,col=7},
-		{n=4,x=56,y=128,speed=-1-rnd()*2,ymax=64,col=7},
-		{n=6,x=74,y=128,speed=-1-rnd()*2,ymax=64,col=7},
-		{n=8,x=92,y=128,speed=-1-rnd()*2,ymax=64,col=7},
+		{n=32,x=2, y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=34,x=20,y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=36,x=38,y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=38,x=56,y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=40,x=74,y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=42,x=92,y=-150,speed=1.5+rnd(),ymax=48,col=0},
+		{n=0,x=2, y=128,speed=-2-rnd(),ymax=64,col=7},
+		{n=2,x=20,y=128,speed=-2-rnd(),ymax=64,col=7},
+		{n=0,x=38,y=128,speed=-2-rnd(),ymax=64,col=7},
+		{n=4,x=56,y=128,speed=-2-rnd(),ymax=64,col=7},
+		{n=6,x=74,y=128,speed=-2-rnd(),ymax=64,col=7},
+		{n=8,x=92,y=128,speed=-2-rnd(),ymax=64,col=7},
 	}
 	for k,l in pairs(letters) do
 		if k < 7 then
@@ -401,9 +402,11 @@ function update_title()
 	end
 end
 
+test_str=0
 function draw_title()
 	rectfill(0,0,128,64,7)
 	rectfill(0,64,128,128,0)
+	print(test_str, 3)
 	color(0)
 	for l in all(letters) do
 		spr(l.n,l.x,l.y,2,2)
@@ -536,6 +539,82 @@ function v_reflect( v, n )
   local refv = v_subv( v, wdnv )
   return refv
 end
+
+-->8
+--animator
+
+anim_default_params=
+{
+	inter_type = "linear",
+	pass_delta = true,
+}
+
+anim_operators={}
+function anim_update(fps)
+	for operator in all(anim_operators) do
+		if operator.enabled then operator:update(fps) end
+	end
+end
+
+function anim_interpolate(from, to, over, func, params)
+	local operator
+	for op in all(anim_operators) do
+		if not op.enabled then
+			operator = op
+			break
+		end
+	end
+	if (params == nil) params = {}
+	params.from = from
+	params.to = to
+	params.over = over
+	params.func = func
+	if operator == nil then
+		operator = {}
+		anim_operators[#anim_operators + 1] = operator
+	end
+	anim_init_operator(operator, params)
+end
+
+function anim_init_operator(operator, params)
+	for key,value in pairs(anim_default_params) do
+		if params[key] == nil then
+			params[key] = anim_default_params[key]
+		end
+	end
+
+	operator.from = params.from
+	operator.to = params.to
+	operator.over = params.over
+	operator.func = params.func
+	operator.t = 0
+	operator.v = params.from
+	operator.inter_type = params.inter_type
+	operator.pass_delta = params.pass_delta
+	operator.enabled = true
+
+
+	operator.update=function (self, fps)
+		self.t += 1/fps;
+		if self.t > self.over then
+			self.enabled = false
+			self.t = self.over
+		end
+		local part = self.t / self.over
+		local new_v = anim_interpolate_float(self.from, self.to, part, self.inter_type)
+		if self.pass_delta then self.func(new_v - self.v) else self.func(new_v) end
+		self.v = new_v;
+	end
+end
+
+function anim_interpolate_float(a, b, t, inter_type)
+	if inter_type == nil or inter_type == "linear" then
+		return a + (b - a) * t
+	end
+
+	return 0
+end
+
 
 __gfx__
 ee66666666666666ee66666666666666ee66666666666eeeeeeeeeee66eeeeeeeeeee6666666666e000000000000000000000000000000000000000000000000
