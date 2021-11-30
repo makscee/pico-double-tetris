@@ -488,7 +488,7 @@ inv_is_inv=false
 
 function inv_rectfill(x0, y0, x1, y1, val)
   if inv_is_inv then val = (val % 2) + 1 end
-  if inv_vert_val < y0 then
+  if inv_vert_val <= y0 then
     rectfill(x0,y0,x1,y1,colors[val])
     return
   end
@@ -497,7 +497,7 @@ function inv_rectfill(x0, y0, x1, y1, val)
     rectfill(x0,y0,x1,y1,colors[val])
     return
   end
-  rectfill(x0,inv_vert_val,x1,y1,colors[val])
+  rectfill(x0,inv_vert_val-1,x1,y1,colors[val])
   val = (val % 2) + 1
   rectfill(x0,y0,x1,inv_vert_val,colors[val])
 end
