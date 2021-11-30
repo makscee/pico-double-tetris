@@ -40,10 +40,10 @@ scenes=
 				for y = 0, sizey - 1 do
 					if y < sizey / 2 then
 						table[x][y] =
-						{x=x,y=y,col=7,v=2}
+						{x=x,y=y,val=2,v=2}
 					else
 						table[x][y] =
-						{x=x,y=y,col=0,v=1}
+						{x=x,y=y,val=1,v=1}
 					end
 				end
 			end	
@@ -58,7 +58,7 @@ scenes=
 			draw_field_back()
 			for x,col in pairs(table) do
 				for y,pixel in pairs(table[x]) do
-					draw_cell(x,y,table[x][y].col)
+					draw_cell(x,y,table[x][y].val)
 				end
 			end
 			draw_scores()
@@ -97,7 +97,7 @@ function draw_shape(v)
 	draw_cell(
 		shape[v][i].x + shape[v].x,
 		shape[v][i].y + shape[v].y,
-		shape[v].col)
+		shape[v].val)
  end
 end
 
@@ -138,31 +138,27 @@ function draw_field_back()
 	-- rectfill(xoffset - p, yoffset + (sizey / 2 + 1) * cell_size - p / 2, xoffset + sizex * cell_size + p - 1 + a, yoffset + sizey * cell_size - 1 + p, 5)
 end
 
-function draw_cell(x,y,col)
+function draw_cell(x,y,val)
 
 	x0 = x*cell_size+xoffset
 	y0 = y*cell_size+yoffset
 	
-	rectfill(x0,y0,
+	inv_rectfill(x0,y0,
 	x0+cell_size-padding,
 	y0+cell_size-padding,
-	col)
+	val)
 end
 
 function draw_scores()
 	local x = xoffset + 2
 	local y1 = yoffset + 2
 	local y2 = cell_size * sizey + yoffset - 7
-	print(scores[1],x,y1,colors[1])
-	print(scores[2],x,y2,colors[2])
+	print(scores[1],x,y1,inv_get_color(x, y1, 1))
+	print(scores[2],x,y2,inv_get_color(x, y2, 2))
 end
 
 function set_cell(x,y,v)
-	local c
-	if v == 2 then c = 7
-	else c = 0 end
-	table[x][y].col = c
-	table[x][y].v = v
+	table[x][y].val = v
 end
 
 input_blocked=false
@@ -185,6 +181,7 @@ function check_input()
 	if btnp(❎) then
 		rotate_shape(1,true)
 		rotate_shape(2,true)
+    sh_flip = not sh_flip
 	end
 	if btnp(4) then
 		rotate_shape(1,false)
@@ -227,13 +224,13 @@ function can_move_shape(x,y,v)
 end
 
 function is_empty_cell(x,y,v)
-	return table[x][y].v != v
+	return table[x][y].val != v
 end
 
 function place_shape(v)
 	for cell in all(shape[v]) do
 		set_cell(cell.x + shape[v].x, cell.y + shape[v].y, v)
-		particle_explosion((shape[v].x + cell.x) * cell_size + xoffset, (shape[v].y + cell.y) * cell_size + yoffset, shape[v].col, 10)
+		particle_explosion((shape[v].x + cell.x) * cell_size + xoffset, (shape[v].y + cell.y) * cell_size + yoffset, colors[shape[v].val], 10)
 	end
 	scores[v] += 1
 	get_random_shape(v)
@@ -244,13 +241,11 @@ function get_random_shape(v)
 	local miny=9999
 	local maxy=-9999
 	foreach(shape[v],function(cell) miny=min(miny, cell.y) maxy=max(maxy,cell.y) end)
+  shape[v].val = v
+  shape[v].x = 5
 	if v == 1 then
-		shape[v].col = colors[v]
-		shape[v].x = 5
 		shape[v].y = -miny
 	else
-		shape[v].col = colors[v]
-		shape[v].x = 5
 		shape[v].y = sizey - maxy - 1
 	end
 end
@@ -275,6 +270,7 @@ end
 
 function drop_shape(v)
 	add_coroutine(function() drop_coroutine(v) end)
+  inv_jump(v == 1)
 	s_frames_left[v] = s_speed
 end
 
@@ -402,11 +398,9 @@ function update_title()
 	end
 end
 
-test_str=0
 function draw_title()
 	rectfill(0,0,128,64,7)
 	rectfill(0,64,128,128,0)
-	print(test_str, 3)
 	color(0)
 	for l in all(letters) do
 		spr(l.n,l.x,l.y,2,2)
@@ -486,7 +480,45 @@ function random_circle_vec()
 	return v_normalize{x=rnd() - 0.5, y=rnd() - 0.5}
 end
 
+-->8
+--inverse effect
 
+inv_vert_val=0 -- y < var = inverse; {0-128}
+inv_is_inv=false
+
+function inv_rectfill(x0, y0, x1, y1, val)
+  if inv_is_inv then val = (val % 2) + 1 end
+  if inv_vert_val < y0 then
+    rectfill(x0,y0,x1,y1,colors[val])
+    return
+  end
+  if inv_vert_val > y1 then
+    val = (val % 2) + 1
+    rectfill(x0,y0,x1,y1,colors[val])
+    return
+  end
+  rectfill(x0,inv_vert_val,x1,y1,colors[val])
+  val = (val % 2) + 1
+  rectfill(x0,y0,x1,inv_vert_val,colors[val])
+end
+
+function inv_get_color(x, y, val)
+  if inv_is_inv == (inv_vert_val < y) then val = (val % 2) + 1 end
+  return colors[val]
+end
+
+inv_jump_cur=0
+function inv_jump(down)
+  if down and inv_jump_cur == 1 or not down and inv_jump_cur == 0 then
+    inv_is_inv = not inv_is_inv
+    inv_jump_cur = (inv_jump_cur + 1) % 2
+    inv_vert_val = inv_jump_cur * 128
+  end
+  local from = inv_jump_cur * 128
+  inv_jump_cur = (inv_jump_cur + 1) % 2
+  local to = inv_jump_cur * 128
+  anim_interpolate(from, to, 0.2, function(v) inv_vert_val = inv_vert_val + v end)
+end
 
 -->8
 --vectors
@@ -611,6 +643,12 @@ function anim_interpolate_float(a, b, t, inter_type)
 	if inter_type == nil or inter_type == "linear" then
 		return a + (b - a) * t
 	end
+  if inter_type == "square" then
+    return a + (b - a) * t * t
+  end
+  if inter_type == "inv_square" then
+    return a + (b - a) / t / t
+  end
 
 	return 0
 end
