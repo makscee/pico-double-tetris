@@ -27,6 +27,18 @@ scenes=
 			draw_title()
 		end,
 	},
+ {
+  name="gameover",
+  update=function()
+   update_gameover()
+  end,
+  init=function()
+   init_gameover()
+  end,
+  draw=function()
+   draw_gameover()
+  end,
+ },
 	{
 		name="game",
 		update=function()
@@ -35,6 +47,7 @@ scenes=
 			check_input()
 		end,
 		init=function()
+   in_game = true
 			music(0)
 			for x = 0, sizex - 1 do
 				table[x] = {}
@@ -236,6 +249,11 @@ function place_shape(v)
  sfx(17)
 	scores[v] += 1
 	get_random_shape(v)
+ for cell in all(shape[v]) do
+  if not is_empty_cell(cell.x + shape[v].x, cell.y + shape[v].y, v) then
+   load_scene("gameover")
+  end
+ end
 end
 
 function get_random_shape(v)
@@ -273,7 +291,7 @@ end
 function drop_shape(v)
  sfx(16)
 	add_coroutine(function() drop_coroutine(v) end)
-  inv_jump(v == 1)
+ inv_jump(v == 1)
 	s_frames_left[v] = s_speed
 end
 
@@ -362,6 +380,7 @@ end
 
 title_text_delay=180
 function init_title()
+ in_game = false
 	letters=
 	{
 		{n=32,x=2, y=-150,speed=1.5+rnd(),ymax=48,col=0},
@@ -412,6 +431,36 @@ function draw_title()
 	if (title_text_delay < 0 and title_text_delay % 30 < 20) then
 		print("press ❎ to start", 33, 90, 7)
 	end
+end
+
+function init_gameover()
+ music(-1)
+ gameover_text_delay = 30
+ in_game = false
+end
+
+function draw_gameover()
+ rectfill(0,0,128,64,7)
+ rectfill(0,64,128,128,0)
+
+ local x1 = 27
+ local x2 = 91
+ local y1 = 59
+ local y2 = 64
+ print("game",x1,y1,0)
+ print("over",x1,y2,7)
+ print(scores[1],x2,y1,0)
+ print(scores[2],x2,y2,7)
+ if (gameover_text_delay < 0 and gameover_text_delay % 60 > 20) then
+  print("press ❎ to restart", 25, 90, 7)
+ end
+end
+
+function update_gameover()
+ gameover_text_delay -= 1
+ if btnp(❎) then
+  load_scene("game")
+ end
 end
 
 -->8
